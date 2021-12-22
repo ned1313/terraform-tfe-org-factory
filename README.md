@@ -5,13 +5,14 @@ Terraform module which creates Terraform Cloud organizations, workspaces, and te
 
 ```hcl
 module "tfe" {
-    source = # TBD
+    source = "ned1313/org-factory/tfe"
     
     organization_name = "name-of-organization-to-manage"
     create_new = true
     workspaces = {
         network-dev = {
             read_access = ["developers"]
+            plan_access = []
             write_access = ["networking"]
             admin_access = []
             tags = ["development","networking"]

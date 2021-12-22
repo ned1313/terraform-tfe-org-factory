@@ -11,12 +11,12 @@ variable "create_new_organization" {
 
 variable "organization_email" {
   type        = string
-  description = "(Optional) Email of owner for organization. Required when creating new organization."
+  description = "(Optional) Email of owner for organization. **Required** when creating new organization."
   default = ""
 }
 
 variable "workspaces" {
-  description = "(Required) A map of workspaces to create. See comments for more information."
+  description = "(Required) A map of workspaces to create. Key is the name of the workspace. Value is an object to define each workspace. See comments for more information."
 
   /*
   Each workspace includes the following elements:
@@ -41,5 +41,5 @@ variable "workspaces" {
 
 variable "teams" {
   type        = map(list(string))
-  description = "(Required) A map of teams to create. The value is a list of usernames to associate with the Team."
+  description = "(Required) A map of teams to create. Key is the name of the team, value is a list of usernames to associate with the Team."
 }
