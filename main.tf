@@ -47,7 +47,7 @@ resource "tfe_organization_membership" "org_members" {
 }
 
 resource "tfe_team_organization_member" "team_members" {
-  count = local.team_members
+  count = length(local.team_members)
   team_id = tfe_team.teams[local.team_members[count.index].team_name].id
   organization_membership_id = tfe_organization_membership.org_members[local.team_members[count.index].member_name].id
 }

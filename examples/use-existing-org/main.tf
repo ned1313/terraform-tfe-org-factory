@@ -1,7 +1,6 @@
 #### Locals 
 
 locals {
-  organization_name = "existing-workspace"
 
 workspaces = {
   workspace1 = {
@@ -38,7 +37,7 @@ teams = {
 module "tfe_workspace" {
   source = "../.."
 
-  organization_name = local.organization_name
+  organization_name = var.organization_name
   workspaces = local.workspaces
   teams = local.teams
 }

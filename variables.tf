@@ -11,7 +11,8 @@ variable "create_new_organization" {
 
 variable "organization_email" {
   type        = string
-  description = "(Required) Email of owner for organization."
+  description = "(Optional) Email of owner for organization. Required when creating new organization."
+  default = ""
 }
 
 variable "workspaces" {
