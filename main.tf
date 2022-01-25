@@ -6,117 +6,88 @@ resource "tfe_organization" "org" {
 }
 
 locals {
+
+  # Set the organization name depending on whether its a new org or existing
   organization_name = var.create_new_organization ? tfe_organization.org[0].id : var.organization_name
+
+  # Import org data from json file
+  org_data = jsondecode(file("${var.config_file_path}"))
+
+  #Create a list of workspace access entries
+  workspace_team_access = flatten([
+    for workspace in local.org_data.workspaces : [
+      for team in workspace["teams"] : {
+        workspace_name = workspace["name"]
+        team_name      = team["name"]
+        access_level   = team["access_level"]
+      }
+    ]
+  ])
+
 }
 
-# Create workspaces in organization
+# Create workspaces
 resource "tfe_workspace" "workspaces" {
-  for_each     = var.workspaces
-  name         = each.key
-  organization = local.organization_name
-  tag_names    = each.value["tags"]
+  # Create a map of workspaces from the list stored in JSON using the
+  # workspace name as the key
+  for_each          = { for workspace in local.org_data.workspaces : workspace["name"] => workspace }
+  name              = each.key
+  description       = each.value["description"]
+  terraform_version = each.value["terraform_version"]
+  organization      = local.organization_name
+  tag_names         = each.value["tag_names"]
 }
 
 # Create teams
 resource "tfe_team" "teams" {
-  for_each     = toset(keys(var.teams))
-  name         = each.value
+  # Create a map of teams from the list stored in JSON using the 
+  # team name as the key
+  for_each     = { for team in local.org_data.teams : team["name"] => team }
+  name         = each.key
   organization = local.organization_name
-  visibility   = "organization"
+  visibility   = each.value["visibility"]
+
+  organization_access {
+
+    manage_policies         = each.value.organization_access["manage_policies"]
+    manage_policy_overrides = each.value.organization_access["manage_policy_overrides"]
+    manage_workspaces       = each.value.organization_access["manage_workspaces"]
+    manage_vcs_settings     = each.value.organization_access["manage_vcs_settings"]
+  }
+}
+
+
+# Configure workspace access for teams
+resource "tfe_team_access" "team_access" {
+  for_each     = { for access in local.workspace_team_access : "${access.workspace_name}_${access.team_name}" => access }
+  access       = each.value["access_level"]
+  team_id      = tfe_team.teams[each.value["team_name"]].id
+  workspace_id = tfe_workspace.workspaces[each.value["workspace_name"]].id
+}
+
+# Add TFC accounts to the organization
+resource "tfe_organization_membership" "org_members" {
+  for_each     = toset(flatten(local.org_data.teams.*.members))
+  organization = local.organization_name
+  email        = each.value
 }
 
 locals {
-
-  org_members = toset(flatten(values(var.teams)))
-
+  # Create a list of member mappings like this
+  # team_name = team_name
+  # member_name = member_email
   team_members = flatten([
-    for team, members in var.teams : [
-      for member in members : {
-        team_name   = team
+    for team in local.org_data.teams : [
+      for member in team["members"] : {
+        team_name   = team["name"]
         member_name = member
-      } if length(members) > 0
+      } if length(team["members"]) > 0
     ]
   ])
-}
-
-# Add members to teams
-resource "tfe_organization_membership" "org_members" {
-  for_each = local.org_members
-  organization = local.organization_name
-  email = each.value
 }
 
 resource "tfe_team_organization_member" "team_members" {
-  count = length(local.team_members)
-  team_id = tfe_team.teams[local.team_members[count.index].team_name].id
-  organization_membership_id = tfe_organization_membership.org_members[local.team_members[count.index].member_name].id
-}
-
-# Create lists for each access level
-locals {
-  workspace_read_access = flatten([
-    for workspace, settings in var.workspaces : [
-      for entry in settings["read_access"] : {
-        workspace_name = workspace
-        team_name      = entry
-      } if length(settings["read_access"]) > 0
-    ]
-  ])
-
-  workspace_plan_access = flatten([
-    for workspace, settings in var.workspaces : [
-      for entry in settings["plan_access"] : {
-        workspace_name = workspace
-        team_name      = entry
-      } if length(settings["plan_access"]) > 0
-    ]
-  ])
-
-  workspace_write_access = flatten([
-    for workspace, settings in var.workspaces : [
-      for entry in settings["write_access"] : {
-        workspace_name = workspace
-        team_name      = entry
-      } if length(settings["write_access"]) > 0
-    ]
-  ])
-
-  workspace_admin_access = flatten([
-    for workspace, settings in var.workspaces : [
-      for entry in settings["admin_access"] : {
-        workspace_name = workspace
-        team_name      = entry
-      } if length(settings["admin_access"]) > 0
-    ]
-  ])
-
-}
-
-# Configure workspace access for teams
-resource "tfe_team_access" "read_access" {
-  count        = length(local.workspace_read_access)
-  access       = "read"
-  team_id      = tfe_team.teams[local.workspace_read_access[count.index].team_name].id
-  workspace_id = tfe_workspace.workspaces[local.workspace_read_access[count.index].workspace_name].id
-}
-
-resource "tfe_team_access" "plan_access" {
-  count        = length(local.workspace_plan_access)
-  access       = "plan"
-  team_id      = tfe_team.teams[local.workspace_plan_access[count.index].team_name].id
-  workspace_id = tfe_workspace.workspaces[local.workspace_plan_access[count.index].workspace_name].id
-}
-
-resource "tfe_team_access" "write_access" {
-  count        = length(local.workspace_write_access)
-  access       = "write"
-  team_id      = tfe_team.teams[local.workspace_write_access[count.index].team_name].id
-  workspace_id = tfe_workspace.workspaces[local.workspace_write_access[count.index].workspace_name].id
-}
-
-resource "tfe_team_access" "admin_access" {
-  count        = length(local.workspace_admin_access)
-  access       = "admin"
-  team_id      = tfe_team.teams[local.workspace_admin_access[count.index].team_name].id
-  workspace_id = tfe_workspace.workspaces[local.workspace_admin_access[count.index].workspace_name].id
+  for_each                   = { for member in local.team_members : "${member.team_name}_${member.member_name}" => member }
+  team_id                    = tfe_team.teams[each.value["team_name"]].id
+  organization_membership_id = tfe_organization_membership.org_members[each.value["member_name"]].id
 }
