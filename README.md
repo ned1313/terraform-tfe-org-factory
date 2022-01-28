@@ -51,6 +51,8 @@ The JSON file holding the configuration should follow the format outlined here o
 }
 ```
 
+Note: Only the name is required for the teams and workspaces. All other fields are optional. The Terraform version for workspaces will be set to "~> 1.0" if no value is provided.
+
 ## Terraform Cloud Plan
 
 The organization created or used by the module must be enrolled in the **Teams & Governance** plan for teams to be created and permissions assigned to the workspaces. If you are creating a new organization, you can apply the module once to create the org, then change the billing plan. On the second run, the teams and permissions will be created.
